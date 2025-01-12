@@ -1,10 +1,14 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Shield, Eye, Bell } from "lucide-react";
+import { HomeTopAd, HomeMidAd, HomeSideAd } from "@/components/ads/HomePageAds";
 
 export default function Home() {
   return (
     <div className="flex flex-col min-h-screen bg-gradient-to-b from-black to-gray-900">
+      {/* Top Ad */}
+      <HomeTopAd />
+
       {/* Hero Section */}
       <section className="relative pt-32 pb-20 px-6">
         <div className="absolute inset-0 -z-10">
@@ -13,7 +17,7 @@ export default function Home() {
         </div>
 
         <div className="max-w-7xl mx-auto">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
+          <div className="grid lg:grid-cols-[1fr,auto] gap-12 items-start">
             {/* Left Column - Text Content */}
             <div className="space-y-8">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-sky-500/20 bg-sky-500/10 text-sky-400">
@@ -50,17 +54,25 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Right Column - Image */}
-            <div className="relative lg:h-[600px] rounded-2xl overflow-hidden">
-              <Image
-                src="/image.png"
-                alt="Crime Reporting Illustration"
-                fill
-                className="object-cover"
-                priority
-              />
+            {/* Right Column - Image and Side Ad */}
+            <div className="flex gap-8">
+              <div className="relative w-[500px] h-[600px] rounded-2xl overflow-hidden bg-white/5">
+                <Image
+                  src="/image.png"
+                  alt="Crime Reporting Illustration"
+                  width={500}
+                  height={600}
+                  style={{ objectFit: 'cover' }}
+                  priority
+                  loading="eager"
+                />
+              </div>
+              <HomeSideAd />
             </div>
           </div>
+
+          {/* Mid Ad */}
+          <HomeMidAd />
 
           {/* Features Section */}
           <div className="mt-24 grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
