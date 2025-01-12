@@ -1,17 +1,15 @@
 import { NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
+import prisma from "@/lib/prisma";
 import { getServerSession } from "next-auth";
-
-const prisma = new PrismaClient();
 
 export async function GET(
   request: Request,
-  { params }: { params: { reportId: string } }
+  { params }: { params: { id: string } }
 ) {
   try {
     const report = await prisma.report.findUnique({
       where: {
-        reportId: params.reportId,
+        id: params.id,
       },
     });
 
@@ -52,4 +50,4 @@ export async function PATCH(
       { status: 500 }
     );
   }
-}
+} 

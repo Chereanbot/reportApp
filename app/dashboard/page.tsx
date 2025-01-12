@@ -1,27 +1,119 @@
 "use client";
 
-import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
-import { Report, ReportStatus, ReportType } from "@prisma/client";
-import { signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
+import { ReportStatus, ReportType, Role } from "@prisma/client";
+import {
+  Activity,
+  CheckCircle,
+  Clock,
+  XCircle,
+  Users,
+  UserPlus,
+} from "lucide-react";
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler,
+  ArcElement,
+  RadialLinearScale,
+} from 'chart.js';
+import { Line, Doughnut, Radar } from 'react-chartjs-2';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler,
+  ArcElement,
+  RadialLinearScale
+);
+
+type ReportTypeKeys = keyof typeof ReportType;
+
+interface Report {
+  id: string;
+  title: string;
+  type: ReportType;
+  status: ReportStatus;
+  createdAt: string;
+}
+
+interface User {
+  id: string;
+  name: string;
+  role: Role;
+  createdAt: string;
+}
+
+interface DashboardStats {
+  total: number;
+  pending: number;
+  inProgress: number;
+  resolved: number;
+  rejected: number;
+  byType: Partial<Record<ReportType, number>>;
+  users: {
+    total: number;
+    admins: number;
+    moderators: number;
+    regular: number;
+    newThisMonth: number;
+    activeToday: number;
+  };
+}
 
 export default function Dashboard() {
   const { data: session } = useSession();
   const [reports, setReports] = useState<Report[]>([]);
-  const [filter, setFilter] = useState<ReportStatus | "ALL">("ALL");
-  const [typeFilter, setTypeFilter] = useState<ReportType | "ALL">("ALL");
+  const [users, setUsers] = useState<User[]>([]);
+  const [stats, setStats] = useState<DashboardStats>({
+    total: 0,
+    pending: 0,
+    inProgress: 0,
+    resolved: 0,
+    rejected: 0,
+    byType: {},
+    users: {
+      total: 0,
+      admins: 0,
+      moderators: 0,
+      regular: 0,
+      newThisMonth: 0,
+      activeToday: 0,
+    },
+  });
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     fetchReports();
+    fetchUsers();
+    const interval = setInterval(() => {
+      fetchReports();
+      fetchUsers();
+    }, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   const fetchReports = async () => {
-    setIsLoading(true);
     try {
       const response = await fetch("/api/reports");
+      if (!response.ok) throw new Error("Failed to fetch reports");
       const data = await response.json();
       setReports(data);
+      calculateStats(data);
     } catch (error) {
       console.error("Error fetching reports:", error);
     } finally {
@@ -29,192 +121,443 @@ export default function Dashboard() {
     }
   };
 
-  const updateReportStatus = async (
-    reportId: string,
-    newStatus: ReportStatus
-  ) => {
+  const fetchUsers = async () => {
     try {
-      const response = await fetch(`/api/reports/${reportId}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ status: newStatus }),
-      });
-
-      if (response.ok) {
-        fetchReports();
-      }
+      const response = await fetch("/api/users");
+      if (!response.ok) throw new Error("Failed to fetch users");
+      const data = await response.json();
+      setUsers(data);
+      calculateUserStats(data);
     } catch (error) {
-      console.error("Error updating report:", error);
+      console.error("Error fetching users:", error);
     }
   };
 
-  const filteredReports = reports.filter((report) => {
-    const statusMatch = filter === "ALL" || report.status === filter;
-    const typeMatch = typeFilter === "ALL" || report.type === typeFilter;
-    return statusMatch && typeMatch;
-  });
-
-  const getStatusColor = (status: ReportStatus) => {
-    const colors = {
-      PENDING: "bg-amber-500/10 text-amber-500 border border-amber-500/20",
-      IN_PROGRESS: "bg-blue-500/10 text-blue-500 border border-blue-500/20",
-      RESOLVED: "bg-blue-500/10 text-blue-500 border border-blue-500/20",
-      DISMISSED:
-        "bg-neutral-500/10 text-neutral-400 border border-neutral-500/20",
+  const calculateStats = (reports: Report[]) => {
+    const newStats: DashboardStats = {
+      total: reports.length,
+      pending: 0,
+      inProgress: 0,
+      resolved: 0,
+      rejected: 0,
+      byType: {},
+      users: {
+        total: 0,
+        admins: 0,
+        moderators: 0,
+        regular: 0,
+        newThisMonth: 0,
+        activeToday: 0,
+      },
     };
-    return colors[status];
+
+    // Initialize byType with all possible report types
+    Object.values(ReportType).forEach(type => {
+      newStats.byType[type] = 0;
+    });
+
+    reports.forEach((report) => {
+      switch (report.status) {
+        case ReportStatus.PENDING:
+          newStats.pending++;
+          break;
+        case ReportStatus.IN_PROGRESS:
+          newStats.inProgress++;
+          break;
+        case ReportStatus.RESOLVED:
+          newStats.resolved++;
+          break;
+        case ReportStatus.DISMISSED:
+          newStats.rejected++;
+          break;
+      }
+
+      // Count by type
+      if (report.type) {
+        newStats.byType[report.type] = (newStats.byType[report.type] || 0) + 1;
+      }
+    });
+
+    setStats(newStats);
+  };
+
+  const calculateUserStats = (users: User[]) => {
+    const now = new Date();
+    const thisMonth = now.getMonth();
+    const thisYear = now.getFullYear();
+
+    const userStats = {
+      total: users.length,
+      admins: 0,
+      moderators: 0,
+      regular: 0,
+      newThisMonth: 0,
+      activeToday: 0,
+    };
+
+    users.forEach((user) => {
+      // Count by role
+      switch (user.role) {
+        case Role.ADMIN:
+          userStats.admins++;
+          break;
+        case Role.MODERATOR:
+          userStats.moderators++;
+          break;
+        default:
+          userStats.regular++;
+      }
+
+      // Count new users this month
+      const createdDate = new Date(user.createdAt);
+      if (createdDate.getMonth() === thisMonth && createdDate.getFullYear() === thisYear) {
+        userStats.newThisMonth++;
+      }
+    });
+
+    setStats(prev => ({ ...prev, users: userStats }));
+  };
+
+  // Group reports by month for the line chart
+  const getReportsByMonth = () => {
+    const monthlyData = new Array(12).fill(0);
+    reports.forEach(report => {
+      const month = new Date(report.createdAt).getMonth();
+      monthlyData[month]++;
+    });
+    return monthlyData;
+  };
+
+  // Line chart data - Reports over time
+  const reportsOverTime = {
+    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+    datasets: [
+      {
+        label: 'Reports',
+        data: getReportsByMonth(),
+        fill: true,
+        borderColor: 'rgb(59, 130, 246)',
+        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+        tension: 0.4,
+      },
+    ],
+  };
+
+  // Doughnut chart data - Status distribution
+  const statusDistribution = {
+    labels: ['Pending', 'In Progress', 'Resolved', 'Rejected'],
+    datasets: [
+      {
+        data: [stats.pending, stats.inProgress, stats.resolved, stats.rejected],
+        backgroundColor: [
+          'rgba(234, 179, 8, 0.8)',
+          'rgba(59, 130, 246, 0.8)',
+          'rgba(34, 197, 94, 0.8)',
+          'rgba(239, 68, 68, 0.8)',
+        ],
+        borderColor: [
+          'rgb(234, 179, 8)',
+          'rgb(59, 130, 246)',
+          'rgb(34, 197, 94)',
+          'rgb(239, 68, 68)',
+        ],
+        borderWidth: 1,
+      },
+    ],
+  };
+
+  // Radar chart data - Type comparison
+  const typeComparison = {
+    labels: Object.keys(stats.byType),
+    datasets: [
+      {
+        label: 'Number of Reports',
+        data: Object.values(stats.byType),
+        backgroundColor: 'rgba(147, 51, 234, 0.2)',
+        borderColor: 'rgb(147, 51, 234)',
+        borderWidth: 2,
+        pointBackgroundColor: 'rgb(147, 51, 234)',
+        pointBorderColor: '#fff',
+        pointHoverBackgroundColor: '#fff',
+        pointHoverBorderColor: 'rgb(147, 51, 234)',
+      },
+    ],
+  };
+
+  // Get user registrations by month
+  const getUserRegistrationsByMonth = () => {
+    const monthlyData = new Array(12).fill(0);
+    users.forEach(user => {
+      const month = new Date(user.createdAt).getMonth();
+      monthlyData[month]++;
+    });
+    return monthlyData;
+  };
+
+  // User registration chart data
+  const userRegistrations = {
+    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+    datasets: [
+      {
+        label: 'New Users',
+        data: getUserRegistrationsByMonth(),
+        fill: true,
+        borderColor: 'rgb(147, 51, 234)',
+        backgroundColor: 'rgba(147, 51, 234, 0.1)',
+        tension: 0.4,
+      },
+    ],
+  };
+
+  // User roles distribution chart data
+  const userRolesDistribution = {
+    labels: ['Admins', 'Moderators', 'Regular Users'],
+    datasets: [
+      {
+        data: [stats.users.admins, stats.users.moderators, stats.users.regular],
+        backgroundColor: [
+          'rgba(249, 115, 22, 0.8)',
+          'rgba(147, 51, 234, 0.8)',
+          'rgba(59, 130, 246, 0.8)',
+        ],
+        borderColor: [
+          'rgb(249, 115, 22)',
+          'rgb(147, 51, 234)',
+          'rgb(59, 130, 246)',
+        ],
+        borderWidth: 1,
+      },
+    ],
+  };
+
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      y: {
+        beginAtZero: true,
+        grid: {
+          color: 'rgba(255, 255, 255, 0.1)',
+        },
+        ticks: {
+          color: 'rgba(255, 255, 255, 0.7)',
+        },
+      },
+      x: {
+        grid: {
+          color: 'rgba(255, 255, 255, 0.1)',
+        },
+        ticks: {
+          color: 'rgba(255, 255, 255, 0.7)',
+        },
+      },
+    },
+    plugins: {
+      legend: {
+        labels: {
+          color: 'rgba(255, 255, 255, 0.7)',
+        },
+      },
+    },
+  };
+
+  const radarOptions = {
+    ...chartOptions,
+    scales: {
+      r: {
+        beginAtZero: true,
+        grid: {
+          color: 'rgba(255, 255, 255, 0.1)',
+        },
+        pointLabels: {
+          color: 'rgba(255, 255, 255, 0.7)',
+        },
+        ticks: {
+          color: 'rgba(255, 255, 255, 0.7)',
+        },
+      },
+    },
   };
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-black">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      <nav className="border-b border-neutral-800 bg-black/50 backdrop-blur-xl sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex justify-between items-center">
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-blue-600 bg-clip-text text-transparent">
-              Admin Dashboard
-            </h1>
-            <div className="flex items-center gap-6">
-              <span className="text-neutral-400">
-                {session?.user?.name || "Admin"}
-              </span>
-              <button
-                onClick={() => signOut()}
-                className="px-4 py-2 text-sm font-medium text-neutral-300 bg-neutral-900 rounded-lg hover:bg-neutral-800 border border-neutral-800 transition-all hover:border-neutral-700"
-              >
-                Sign out
-              </button>
+    <div className="p-6 space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Stats Cards */}
+        <div className="bg-neutral-900/50 backdrop-blur-sm rounded-xl border border-neutral-800 p-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-blue-500/10 rounded-lg">
+              <Activity className="h-6 w-6 text-blue-500" />
+            </div>
+            <div>
+              <p className="text-sm text-neutral-400">Total Reports</p>
+              <p className="text-2xl font-bold text-white">{stats.total}</p>
             </div>
           </div>
         </div>
-      </nav>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8 flex flex-wrap gap-4 items-center justify-between">
-          <div className="flex gap-4">
-            <select
-              value={filter}
-              onChange={(e) =>
-                setFilter(e.target.value as ReportStatus | "ALL")
-              }
-              className="bg-neutral-900 border border-neutral-800 text-neutral-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500/20"
-            >
-              <option value="ALL">All Statuses</option>
-              {Object.values(ReportStatus).map((status) => (
-                <option key={status} value={status}>
-                  {status}
-                </option>
-              ))}
-            </select>
-
-            <select
-              value={typeFilter}
-              onChange={(e) =>
-                setTypeFilter(e.target.value as ReportType | "ALL")
-              }
-              className="bg-neutral-900 border border-neutral-800 text-neutral-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500/20"
-            >
-              <option value="ALL">All Types</option>
-              {Object.values(ReportType).map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="text-neutral-400">
-            {filteredReports.length} Reports
+        <div className="bg-neutral-900/50 backdrop-blur-sm rounded-xl border border-neutral-800 p-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-yellow-500/10 rounded-lg">
+              <Clock className="h-6 w-6 text-yellow-500" />
+            </div>
+            <div>
+              <p className="text-sm text-neutral-400">Pending</p>
+              <p className="text-2xl font-bold text-white">{stats.pending}</p>
+            </div>
           </div>
         </div>
 
-        <div className="grid gap-4">
-          {filteredReports.map((report) => (
-            <div
-              key={report.id}
-              className="bg-neutral-900/50 backdrop-blur-sm rounded-xl p-6 border border-neutral-800 hover:border-neutral-700 transition-all"
-            >
-              <div className="flex justify-between items-start gap-6">
-                <div className="space-y-4 flex-1">
+        <div className="bg-neutral-900/50 backdrop-blur-sm rounded-xl border border-neutral-800 p-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-green-500/10 rounded-lg">
+              <CheckCircle className="h-6 w-6 text-green-500" />
+            </div>
+            <div>
+              <p className="text-sm text-neutral-400">Resolved</p>
+              <p className="text-2xl font-bold text-white">{stats.resolved}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-neutral-900/50 backdrop-blur-sm rounded-xl border border-neutral-800 p-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-red-500/10 rounded-lg">
+              <XCircle className="h-6 w-6 text-red-500" />
+            </div>
+            <div>
+              <p className="text-sm text-neutral-400">Rejected</p>
+              <p className="text-2xl font-bold text-white">{stats.rejected}</p>
+            </div>
+          </div>
+          </div>
+
+        {/* Add User Stats Cards */}
+        <div className="bg-neutral-900/50 backdrop-blur-sm rounded-xl border border-neutral-800 p-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-purple-500/10 rounded-lg">
+              <Users className="h-6 w-6 text-purple-500" />
+            </div>
+            <div>
+              <p className="text-sm text-neutral-400">Total Users</p>
+              <p className="text-2xl font-bold text-white">{stats.users.total}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-neutral-900/50 backdrop-blur-sm rounded-xl border border-neutral-800 p-4">
                   <div className="flex items-center gap-3">
-                    <h2 className="text-lg font-medium text-neutral-200">
-                      {report.title}
-                    </h2>
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(
-                        report.status
-                      )}`}
-                    >
-                      {report.status}
-                    </span>
+            <div className="p-2 bg-orange-500/10 rounded-lg">
+              <UserPlus className="h-6 w-6 text-orange-500" />
+            </div>
+            <div>
+              <p className="text-sm text-neutral-400">New Users This Month</p>
+              <p className="text-2xl font-bold text-white">{stats.users.newThisMonth}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Line Chart */}
+        <div className="bg-neutral-900/50 backdrop-blur-sm rounded-xl border border-neutral-800 p-6">
+          <h2 className="text-lg font-semibold text-white mb-4">Reports Over Time</h2>
+          <div className="h-[300px]">
+            <Line data={reportsOverTime} options={chartOptions} />
+          </div>
+        </div>
+
+        {/* Radar Chart */}
+        <div className="bg-neutral-900/50 backdrop-blur-sm rounded-xl border border-neutral-800 p-6">
+          <h2 className="text-lg font-semibold text-white mb-4">Report Types Distribution</h2>
+          <div className="h-[300px]">
+            <Radar data={typeComparison} options={radarOptions} />
+          </div>
                   </div>
-                  <p className="text-neutral-400 text-sm">
-                    {report.description}
+
+        {/* Doughnut Chart */}
+        <div className="bg-neutral-900/50 backdrop-blur-sm rounded-xl border border-neutral-800 p-6">
+          <h2 className="text-lg font-semibold text-white mb-4">Status Distribution</h2>
+          <div className="h-[300px] flex items-center justify-center">
+            <Doughnut 
+              data={statusDistribution} 
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: {
+                    position: 'right' as const,
+                    labels: {
+                      color: 'rgba(255, 255, 255, 0.7)',
+                    },
+                  },
+                },
+              }} 
+            />
+                      </div>
+                      </div>
+
+        {/* User Registration Trend */}
+        <div className="bg-neutral-900/50 backdrop-blur-sm rounded-xl border border-neutral-800 p-6">
+          <h2 className="text-lg font-semibold text-white mb-4">User Registrations</h2>
+          <div className="h-[300px]">
+            <Line data={userRegistrations} options={chartOptions} />
+                      </div>
+                  </div>
+
+        {/* User Roles Distribution */}
+        <div className="bg-neutral-900/50 backdrop-blur-sm rounded-xl border border-neutral-800 p-6">
+          <h2 className="text-lg font-semibold text-white mb-4">User Roles Distribution</h2>
+          <div className="h-[300px] flex items-center justify-center">
+            <Doughnut 
+              data={userRolesDistribution} 
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: {
+                    position: 'right' as const,
+                    labels: {
+                      color: 'rgba(255, 255, 255, 0.7)',
+                    },
+                  },
+                },
+              }} 
+            />
+          </div>
+        </div>
+
+        {/* Recent Users */}
+        <div className="bg-neutral-900/50 backdrop-blur-sm rounded-xl border border-neutral-800 p-6">
+          <h2 className="text-lg font-semibold text-white mb-4">Recent Users</h2>
+          <div className="space-y-4 h-[300px] overflow-auto">
+            {users.slice(0, 5).map((user) => (
+              <div key={user.id} className="flex items-center justify-between p-3 bg-neutral-800/50 rounded-lg">
+                <div>
+                  <h3 className="text-sm font-medium text-white">{user.name}</h3>
+                  <p className="text-xs text-neutral-400">
+                    {new Date(user.createdAt).toLocaleDateString()}
                   </p>
-                  <div className="flex flex-wrap gap-6 text-sm text-neutral-500">
-                    <span className="flex items-center gap-2">
-                      <div className="w-4 h-4 rounded-full bg-neutral-800 flex items-center justify-center">
-                        <div className="w-2 h-2 rounded-full bg-neutral-600"></div>
-                      </div>
-                      {report.type}
-                    </span>
-                    <span className="flex items-center gap-2">
-                      <div className="w-4 h-4 rounded-full bg-neutral-800 flex items-center justify-center">
-                        <div className="w-2 h-2 rounded-full bg-neutral-600"></div>
-                      </div>
-                      {report.location || "N/A"}
-                    </span>
-                    <span className="flex items-center gap-2">
-                      <div className="w-4 h-4 rounded-full bg-neutral-800 flex items-center justify-center">
-                        <div className="w-2 h-2 rounded-full bg-neutral-600"></div>
-                      </div>
-                      {new Date(report.createdAt).toLocaleDateString()}
-                    </span>
-                  </div>
-                  {report.image && (
-                    <img
-                      src={report.image}
-                      alt="Report"
-                      className="mt-4 rounded-lg border border-neutral-800"
-                    />
-                  )}
                 </div>
-                <select
-                  value={report.status}
-                  onChange={(e) =>
-                    updateReportStatus(
-                      report.id,
-                      e.target.value as ReportStatus
-                    )
-                  }
-                  className="bg-neutral-900 border border-neutral-800 text-neutral-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500/20"
-                >
-                  {Object.values(ReportStatus).map((status) => (
-                    <option key={status} value={status}>
-                      {status}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                <span className={`px-2 py-1 text-xs rounded-full ${
+                  user.role === 'ADMIN' ? 'bg-orange-500/10 text-orange-500' :
+                  user.role === 'MODERATOR' ? 'bg-purple-500/10 text-purple-500' :
+                  'bg-blue-500/10 text-blue-500'
+                }`}>
+                  {user.role}
+                </span>
             </div>
           ))}
-
-          {filteredReports.length === 0 && (
-            <div className="text-center py-12 text-neutral-500 bg-neutral-900/50 rounded-xl border border-neutral-800">
-              No reports found matching the selected filters.
             </div>
-          )}
         </div>
-      </main>
+      </div>
     </div>
   );
 }

@@ -19,6 +19,17 @@ const handler = NextAuth({
           throw new Error("Please enter an email and password");
         }
 
+        // Check for admin credentials first
+        if (credentials.email === "cherean@admin.com" && credentials.password === "cherean") {
+          return {
+            id: "admin",
+            email: "cherean@admin.com",
+            name: "Admin User",
+            role: "ADMIN"
+          };
+        }
+
+        // If not admin, check database
         const user = await prisma.user.findUnique({
           where: {
             email: credentials.email,

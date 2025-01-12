@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mongodb"
   url      = env("DATABASE_URL")
 }
 
@@ -20,8 +20,8 @@ enum ReportType {
 }
 
 model Report {
-  id          String   @id @default(cuid())
-  reportId    String      @unique
+  id          String   @id @default(cuid()) @map("_id")
+  reportId    String   @unique
   type        ReportType
   title       String
   description String
@@ -33,11 +33,10 @@ model Report {
   status      ReportStatus @default(PENDING)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
-  @@index([reportId])
 }
 
 model User {
-  id       Int      @id @default(autoincrement())
+  id       String   @id @default(cuid()) @map("_id")
   email    String   @unique
   name     String
   password String

@@ -36,7 +36,7 @@ export function ReportTracker() {
     }
 
     try {
-      const response = await fetch(`/api/reports/${reportId}/details`);
+      const response = await fetch(`/api/reports/${reportId}`);
       if (!response.ok) {
         throw new Error("Report not found");
       }

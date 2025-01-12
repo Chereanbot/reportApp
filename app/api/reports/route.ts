@@ -79,3 +79,44 @@ export async function GET(req: Request) {
     }
   }
 }
+
+export async function POST(req: Request) {
+  try {
+    const session = await getServerSession();
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = await req.json();
+    const { title, description, type, location, latitude, longitude, image } = body;
+
+    // Validate required fields
+    if (!title || !description || !type) {
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    }
+
+    // Generate a unique reportId
+    const reportCount = await prisma.report.count();
+    const reportId = `REP${String(reportCount + 1).padStart(3, '0')}`;
+
+    const report = await prisma.report.create({
+      data: {
+        reportId,
+        title,
+        description,
+        type: type as ReportType,
+        reportType: type === 'EMERGENCY' ? 'CRIME_IN_PROGRESS' : 'SUSPICIOUS_ACTIVITY',
+        location,
+        latitude,
+        longitude,
+        image,
+        status: ReportStatus.PENDING,
+      }
+    });
+
+    return NextResponse.json(report);
+  } catch (error) {
+    console.error('Error creating report:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
+}
