@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Role } from "@prisma/client";
 import { ArrowLeft, Save, Loader } from "lucide-react";
@@ -23,11 +23,7 @@ export default function EditUserPage({ params }: { params: { id: string } }) {
     role: Role.USER,
   });
 
-  useEffect(() => {
-    fetchUser();
-  }, []);
-
-  const fetchUser = async () => {
+  const fetchUser = useCallback(async () => {
     try {
       setIsLoading(true);
       setError("");
@@ -50,7 +46,11 @@ export default function EditUserPage({ params }: { params: { id: string } }) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [params.id]);
+
+  useEffect(() => {
+    fetchUser();
+  }, [fetchUser]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

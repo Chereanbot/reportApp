@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { ReportStatus, ReportType, Role } from "@prisma/client";
 import {
@@ -26,6 +26,7 @@ import {
   RadialLinearScale,
 } from 'chart.js';
 import { Line, Doughnut, Radar } from 'react-chartjs-2';
+import { BannerAd } from '@/components/ads/AdPlacements';
 
 ChartJS.register(
   CategoryScale,
@@ -40,8 +41,6 @@ ChartJS.register(
   ArcElement,
   RadialLinearScale
 );
-
-type ReportTypeKeys = keyof typeof ReportType;
 
 interface Report {
   id: string;
@@ -76,7 +75,7 @@ interface DashboardStats {
 }
 
 export default function Dashboard() {
-  const { data: session } = useSession();
+  const { status } = useSession();
   const [reports, setReports] = useState<Report[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [stats, setStats] = useState<DashboardStats>({
@@ -97,58 +96,52 @@ export default function Dashboard() {
   });
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    fetchReports();
-    fetchUsers();
-    const interval = setInterval(() => {
-      fetchReports();
-      fetchUsers();
-    }, 30000);
-    return () => clearInterval(interval);
+  const calculateUserStats = useCallback((userData: User[]) => {
+    const now = new Date();
+    const thisMonth = now.getMonth();
+    const thisYear = now.getFullYear();
+
+    const userStats = {
+      total: userData.length,
+      admins: 0,
+      moderators: 0,
+      regular: 0,
+      newThisMonth: 0,
+      activeToday: 0,
+    };
+
+    userData.forEach((user) => {
+      // Count by role
+      switch (user.role) {
+        case Role.ADMIN:
+          userStats.admins++;
+          break;
+        case Role.MODERATOR:
+          userStats.moderators++;
+          break;
+        default:
+          userStats.regular++;
+      }
+
+      // Count new users this month
+      const createdDate = new Date(user.createdAt);
+      if (createdDate.getMonth() === thisMonth && createdDate.getFullYear() === thisYear) {
+        userStats.newThisMonth++;
+      }
+    });
+
+    setStats(prev => ({ ...prev, users: userStats }));
   }, []);
 
-  const fetchReports = async () => {
-    try {
-      const response = await fetch("/api/reports");
-      if (!response.ok) throw new Error("Failed to fetch reports");
-      const data = await response.json();
-      setReports(data);
-      calculateStats(data);
-    } catch (error) {
-      console.error("Error fetching reports:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const fetchUsers = async () => {
-    try {
-      const response = await fetch("/api/users");
-      if (!response.ok) throw new Error("Failed to fetch users");
-      const data = await response.json();
-      setUsers(data);
-      calculateUserStats(data);
-    } catch (error) {
-      console.error("Error fetching users:", error);
-    }
-  };
-
-  const calculateStats = (reports: Report[]) => {
+  const calculateStats = useCallback((reportData: Report[]) => {
     const newStats: DashboardStats = {
-      total: reports.length,
+      total: reportData.length,
       pending: 0,
       inProgress: 0,
       resolved: 0,
       rejected: 0,
       byType: {},
-      users: {
-        total: 0,
-        admins: 0,
-        moderators: 0,
-        regular: 0,
-        newThisMonth: 0,
-        activeToday: 0,
-      },
+      users: stats.users,
     };
 
     // Initialize byType with all possible report types
@@ -156,7 +149,7 @@ export default function Dashboard() {
       newStats.byType[type] = 0;
     });
 
-    reports.forEach((report) => {
+    reportData.forEach((report) => {
       switch (report.status) {
         case ReportStatus.PENDING:
           newStats.pending++;
@@ -179,44 +172,52 @@ export default function Dashboard() {
     });
 
     setStats(newStats);
-  };
+  }, [stats.users]);
 
-  const calculateUserStats = (users: User[]) => {
-    const now = new Date();
-    const thisMonth = now.getMonth();
-    const thisYear = now.getFullYear();
-
-    const userStats = {
-      total: users.length,
-      admins: 0,
-      moderators: 0,
-      regular: 0,
-      newThisMonth: 0,
-      activeToday: 0,
-    };
-
-    users.forEach((user) => {
-      // Count by role
-      switch (user.role) {
-        case Role.ADMIN:
-          userStats.admins++;
-          break;
-        case Role.MODERATOR:
-          userStats.moderators++;
-          break;
-        default:
-          userStats.regular++;
+  const fetchReports = useCallback(async () => {
+    try {
+      const response = await fetch('/api/reports');
+      if (response.ok) {
+        const data = await response.json();
+        setReports(data);
+        calculateStats(data);
       }
+    } catch (error) {
+      console.error('Error fetching reports:', error instanceof Error ? error.message : "Unknown error");
+    }
+  }, [calculateStats]);
 
-      // Count new users this month
-      const createdDate = new Date(user.createdAt);
-      if (createdDate.getMonth() === thisMonth && createdDate.getFullYear() === thisYear) {
-        userStats.newThisMonth++;
+  const fetchUsers = useCallback(async () => {
+    try {
+      const response = await fetch('/api/users');
+      if (response.ok) {
+        const data = await response.json();
+        setUsers(data);
+        calculateUserStats(data);
       }
-    });
+    } catch (error) {
+      console.error('Error fetching users:', error instanceof Error ? error.message : "Unknown error");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [calculateUserStats]);
 
-    setStats(prev => ({ ...prev, users: userStats }));
-  };
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      window.location.href = "/auth/signin";
+      return;
+    }
+
+    if (status === "authenticated") {
+      fetchReports();
+      fetchUsers();
+      const interval = setInterval(() => {
+        fetchReports();
+        fetchUsers();
+      }, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [status, fetchReports, fetchUsers]);
 
   // Group reports by month for the line chart
   const getReportsByMonth = () => {
@@ -389,6 +390,7 @@ export default function Dashboard() {
 
   return (
     <div className="p-6 space-y-6">
+      <BannerAd />
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Stats Cards */}
         <div className="bg-neutral-900/50 backdrop-blur-sm rounded-xl border border-neutral-800 p-4">

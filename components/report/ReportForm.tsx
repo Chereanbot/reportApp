@@ -1,56 +1,138 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { LocationInput } from "./LocationInput";
-import crypto from "crypto";
+import { useState } from "react";
+import dynamic from "next/dynamic";
+import Image from "next/image";
 
-const REPORT_TYPES = [
-  "Theft",
-  "Fire Outbreak",
-  "Medical Emergency",
-  "Natural Disaster",
-  "Violence",
-  "Other",
-] as const;
+// Import LocationInput with no SSR
+const LocationInput = dynamic(
+  () => import("@/components/report/LocationInput").then((mod) => mod.LocationInput),
+  { ssr: false }
+);
 
 type ReportType = "EMERGENCY" | "NON_EMERGENCY";
+type SpecificReportType = 
+  | "THEFT"
+  | "FIRE_OUTBREAK"
+  | "MEDICAL_EMERGENCY"
+  | "NATURAL_DISASTER"
+  | "VIOLENCE"
+  | "TRAFFIC_ACCIDENT"
+  | "VANDALISM"
+  | "SUSPICIOUS_ACTIVITY"
+  | "PUBLIC_DISTURBANCE"
+  | "OTHER";
+
+interface ReportData {
+  title: string;
+  description: string;
+  type: ReportType;
+  specificType: SpecificReportType;
+  location: string;
+  latitude: number | null;
+  longitude: number | null;
+  image: string | null;
+}
+
+const REPORT_TYPES: Record<SpecificReportType, { label: string; description: string; emergency: boolean }> = {
+  THEFT: {
+    label: "Theft",
+    description: "Robbery, burglary, or stealing",
+    emergency: true
+  },
+  FIRE_OUTBREAK: {
+    label: "Fire Outbreak",
+    description: "Fire incidents or potential fire hazards",
+    emergency: true
+  },
+  MEDICAL_EMERGENCY: {
+    label: "Medical Emergency",
+    description: "Health-related emergencies requiring immediate attention",
+    emergency: true
+  },
+  NATURAL_DISASTER: {
+    label: "Natural Disaster",
+    description: "Floods, earthquakes, storms, or other natural calamities",
+    emergency: true
+  },
+  VIOLENCE: {
+    label: "Violence",
+    description: "Physical assault, fights, or violent behavior",
+    emergency: true
+  },
+  TRAFFIC_ACCIDENT: {
+    label: "Traffic Accident",
+    description: "Vehicle collisions or traffic-related incidents",
+    emergency: true
+  },
+  VANDALISM: {
+    label: "Vandalism",
+    description: "Property damage or destruction",
+    emergency: false
+  },
+  SUSPICIOUS_ACTIVITY: {
+    label: "Suspicious Activity",
+    description: "Unusual or concerning behavior",
+    emergency: false
+  },
+  PUBLIC_DISTURBANCE: {
+    label: "Public Disturbance",
+    description: "Noise complaints or public disorder",
+    emergency: false
+  },
+  OTHER: {
+    label: "Other",
+    description: "Other incidents not covered by other categories",
+    emergency: false
+  }
+};
 
 interface ReportFormProps {
-  onComplete: (data: any) => void;
+  onComplete: (data: ReportData) => void;
 }
 
 export function ReportForm({ onComplete }: ReportFormProps) {
-  const [formData, setFormData] = useState({
-    incidentType: "" as ReportType,
-    specificType: "",
-    location: "",
-    description: "",
+  const [formData, setFormData] = useState<ReportData>({
     title: "",
-  });
-  const [image, setImage] = useState<string | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [coordinates, setCoordinates] = useState<{
-    latitude: number | null;
-    longitude: number | null;
-  }>({
+    description: "",
+    type: "NON_EMERGENCY" as ReportType,
+    specificType: "OTHER" as SpecificReportType,
+    location: "",
     latitude: null,
     longitude: null,
+    image: null,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [image, setImage] = useState<string | null>(null);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Reset states
+    setAnalysisError(null);
     setIsAnalyzing(true);
 
     try {
-      const base64 = await new Promise((resolve) => {
+      // Convert image to base64
+      const base64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result);
+        reader.onloadend = () => {
+          if (typeof reader.result === 'string') {
+            resolve(reader.result);
+          } else {
+            reject(new Error('Failed to read file'));
+          }
+        };
+        reader.onerror = () => reject(reader.error);
         reader.readAsDataURL(file);
       });
 
+      setImage(base64);
+
+      // Analyze image with Gemini
       const response = await fetch("/api/analyze-image", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -59,49 +141,48 @@ export function ReportForm({ onComplete }: ReportFormProps) {
 
       const data = await response.json();
 
-      if (data.title && data.description && data.reportType) {
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to analyze image');
+      }
+
+      if (data.title && data.description && data.type && data.specificType && data.location) {
         setFormData((prev) => ({
           ...prev,
           title: data.title,
           description: data.description,
-          specificType: data.reportType,
+          type: data.type,
+          specificType: data.specificType,
+          location: data.location,
         }));
-        setImage(base64 as string);
+      } else {
+        throw new Error('Incomplete analysis results');
       }
     } catch (error) {
       console.error("Error analyzing image:", error);
+      setAnalysisError(
+        error instanceof Error 
+          ? error.message 
+          : "Failed to analyze image. Please fill in the details manually."
+      );
     } finally {
       setIsAnalyzing(false);
     }
   };
 
-  const generateReportId = useCallback(() => {
-    const timestamp = Date.now().toString();
-    const randomBytes = crypto.randomBytes(16).toString("hex");
-    const combinedString = `${timestamp}-${randomBytes}`;
-    return crypto
-      .createHash("sha256")
-      .update(combinedString)
-      .digest("hex")
-      .slice(0, 16);
-  }, []);
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSubmitting(true);
 
     try {
       const reportData = {
-        reportId: generateReportId(),
-        type: formData.incidentType,
-        specificType: formData.specificType,
         title: formData.title,
         description: formData.description,
+        type: formData.type,
+        specificType: formData.specificType,
         location: formData.location,
-        latitude: coordinates.latitude,
-        longitude: coordinates.longitude,
+        latitude: formData.latitude,
+        longitude: formData.longitude,
         image: image,
-        status: "PENDING",
       };
 
       const response = await fetch("/api/reports/create", {
@@ -121,6 +202,7 @@ export function ReportForm({ onComplete }: ReportFormProps) {
       onComplete(result);
     } catch (error) {
       console.error("Error submitting report:", error);
+      alert(error instanceof Error ? error.message : "Failed to submit report");
     } finally {
       setIsSubmitting(false);
     }
@@ -133,10 +215,10 @@ export function ReportForm({ onComplete }: ReportFormProps) {
         <button
           type="button"
           onClick={() =>
-            setFormData((prev) => ({ ...prev, incidentType: "EMERGENCY" }))
+            setFormData((prev) => ({ ...prev, type: "EMERGENCY" }))
           }
           className={`p-6 rounded-2xl border-2 transition-all duration-200 ${
-            formData.incidentType === "EMERGENCY"
+            formData.type === "EMERGENCY"
               ? "bg-red-500/20 border-red-500 shadow-lg shadow-red-500/20"
               : "bg-zinc-900/50 border-zinc-800 hover:bg-red-500/10 hover:border-red-500/50"
           }`}
@@ -165,10 +247,10 @@ export function ReportForm({ onComplete }: ReportFormProps) {
         <button
           type="button"
           onClick={() =>
-            setFormData((prev) => ({ ...prev, incidentType: "NON_EMERGENCY" }))
+            setFormData((prev) => ({ ...prev, type: "NON_EMERGENCY" }))
           }
           className={`p-6 rounded-2xl border-2 transition-all duration-200 ${
-            formData.incidentType === "NON_EMERGENCY"
+            formData.type === "NON_EMERGENCY"
               ? "bg-orange-500/20 border-orange-500 shadow-lg shadow-orange-500/20"
               : "bg-zinc-900/50 border-zinc-800 hover:bg-orange-500/10 hover:border-orange-500/50"
           }`}
@@ -193,6 +275,38 @@ export function ReportForm({ onComplete }: ReportFormProps) {
         </button>
       </div>
 
+      {/* Specific Report Type */}
+      {formData.type && (
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-zinc-400">
+            Report Type
+          </label>
+          <div className="grid grid-cols-2 gap-4">
+            {Object.entries(REPORT_TYPES)
+              .filter(([, info]) => info.emergency === (formData.type === "EMERGENCY"))
+              .map(([reportType, info]) => (
+                <button
+                  key={reportType}
+                  type="button"
+                  onClick={() =>
+                    setFormData((prev) => ({ ...prev, specificType: reportType as SpecificReportType }))
+                  }
+                  className={`p-4 rounded-xl border transition-all duration-200 text-left ${
+                    formData.specificType === reportType
+                      ? "bg-sky-500/20 border-sky-500 shadow-lg shadow-sky-500/20"
+                      : "bg-zinc-900/50 border-zinc-800 hover:bg-sky-500/10 hover:border-sky-500/50"
+                  }`}
+                >
+                  <div className="space-y-1">
+                    <span className="block font-medium text-white">{info.label}</span>
+                    <span className="block text-xs text-zinc-400">{info.description}</span>
+                  </div>
+                </button>
+              ))}
+          </div>
+        </div>
+      )}
+
       {/* Image Upload */}
       <div className="relative group">
         <input
@@ -211,13 +325,18 @@ export function ReportForm({ onComplete }: ReportFormProps) {
           {image ? (
             <div className="space-y-4">
               <div className="w-full h-48 relative rounded-lg overflow-hidden">
-                <img
+                <Image
                   src={image}
-                  alt="Preview"
-                  className="w-full h-full object-cover"
+                  alt="Report image preview"
+                  fill
+                  className="object-cover"
+                  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                 />
               </div>
               <p className="text-sm text-zinc-400">Click to change image</p>
+              {analysisError && (
+                <p className="text-sm text-red-400">{analysisError}</p>
+              )}
             </div>
           ) : (
             <div className="space-y-4">
@@ -234,9 +353,14 @@ export function ReportForm({ onComplete }: ReportFormProps) {
                   d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
                 />
               </svg>
+              <div className="space-y-2">
               <p className="text-sm text-zinc-400">
                 Drop an image here or click to upload
               </p>
+                <p className="text-xs text-zinc-500">
+                  The image will be analyzed to automatically fill in the report details
+                </p>
+              </div>
             </div>
           )}
         </label>
@@ -263,63 +387,22 @@ export function ReportForm({ onComplete }: ReportFormProps) {
                   d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                 ></path>
               </svg>
-              <span className="text-sky-500 font-medium">
-                Analyzing image...
-              </span>
+              <span className="text-sm text-sky-500">Analyzing image...</span>
             </div>
           </div>
         )}
       </div>
 
-      {/* Specific Report Type */}
-      <div>
-        <label className="block text-sm font-medium text-zinc-400 mb-2">
-          Incident Type
-        </label>
-        <select
-          value={formData.specificType}
-          onChange={(e) =>
-            setFormData((prev) => ({ ...prev, specificType: e.target.value }))
-          }
-          className="w-full rounded-xl bg-zinc-900/50 border border-zinc-800 px-4 py-3.5
-                   text-white transition-colors duration-200
-                   focus:outline-none focus:ring-2 focus:ring-sky-500/40"
-          required
-        >
-          <option value="">Select type</option>
-          {REPORT_TYPES.map((type) => (
-            <option key={type} value={type}>
-              {type}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Location */}
-      <LocationInput
-        value={formData.location}
-        onChange={(value) =>
-          setFormData((prev) => ({ ...prev, location: value }))
-        }
-        onCoordinatesChange={(lat, lng) =>
-          setCoordinates({
-            latitude: lat,
-            longitude: lng,
-          })
-        }
-      />
-
-      {/* Title */}
-      <div>
-        <label className="block text-sm font-medium text-zinc-400 mb-2">
-          Report Title
+      {/* Title Input */}
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-zinc-400">
+          Title
         </label>
         <input
           type="text"
           value={formData.title}
-          onChange={(e) =>
-            setFormData((prev) => ({ ...prev, title: e.target.value }))
-          }
+          onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+          placeholder="Enter report title"
           className="w-full rounded-xl bg-zinc-900/50 border border-zinc-800 px-4 py-3.5
                    text-white transition-colors duration-200
                    focus:outline-none focus:ring-2 focus:ring-sky-500/40"
@@ -327,77 +410,43 @@ export function ReportForm({ onComplete }: ReportFormProps) {
         />
       </div>
 
-      {/* Description */}
-      <div>
-        <label className="block text-sm font-medium text-zinc-400 mb-2">
+      {/* Description Input */}
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-zinc-400">
           Description
         </label>
         <textarea
           value={formData.description}
-          onChange={(e) =>
-            setFormData((prev) => ({ ...prev, description: e.target.value }))
-          }
-          rows={4}
-          className="w-full rounded-xl bg-zinc-900/50 border border-zinc-800 px-4 py-3.5
+          onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+          placeholder="Enter detailed description"
+          className="w-full h-32 rounded-xl bg-zinc-900/50 border border-zinc-800 px-4 py-3.5
                    text-white transition-colors duration-200
                    focus:outline-none focus:ring-2 focus:ring-sky-500/40"
           required
         />
       </div>
 
-      {/* Submit Button */}
+      {/* Location Input */}
+      <LocationInput
+        value={formData.location}
+        onChange={(value) => setFormData(prev => ({ ...prev, location: value }))}
+        onCoordinatesChange={(lat, lng) => {
+          setFormData(prev => ({
+            ...prev,
+            latitude: lat,
+            longitude: lng
+          }));
+        }}
+      />
+
       <button
         type="submit"
-        disabled={isSubmitting}
-        className="w-full relative group overflow-hidden rounded-xl bg-gradient-to-br from-sky-500 to-blue-600 
-                 px-4 py-3.5 text-sm font-medium text-white shadow-lg
-                 transition-all duration-200 hover:from-sky-400 hover:to-blue-500
+        disabled={isSubmitting || !formData.type || !formData.specificType || !formData.title || !formData.description}
+        className="w-full py-4 px-6 rounded-xl bg-sky-500 text-white font-medium
+                 hover:bg-sky-600 transition-colors duration-200
                  disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        <div className="relative flex items-center justify-center gap-2">
-          {isSubmitting ? (
-            <>
-              <svg
-                className="animate-spin h-4 w-4"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                ></circle>
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                ></path>
-              </svg>
-              <span>Submitting...</span>
-            </>
-          ) : (
-            <>
-              <span>Submit Report</span>
-              <svg
-                className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-1"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M14 5l7 7m0 0l-7 7m7-7H3"
-                />
-              </svg>
-            </>
-          )}
-        </div>
+        {isSubmitting ? "Submitting..." : "Submit Report"}
       </button>
     </form>
   );

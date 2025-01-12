@@ -1,18 +1,40 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Report, ReportStatus, ReportType } from "@prisma/client";
-import { Eye, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
+import { Eye, CheckCircle, XCircle } from "lucide-react";
 
 export default function ReportsPage() {
-  const { data: session, status } = useSession();
+  const { status } = useSession();
   const router = useRouter();
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<ReportStatus | "ALL">("ALL");
   const [typeFilter, setTypeFilter] = useState<ReportType | "ALL">("ALL");
+
+  const fetchReports = useCallback(async () => {
+    try {
+      let url = "/api/reports";
+      const params = new URLSearchParams();
+      if (statusFilter !== "ALL") params.append("status", statusFilter);
+      if (typeFilter !== "ALL") params.append("type", typeFilter);
+      if (params.toString()) url += `?${params.toString()}`;
+
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      setReports(data);
+    } catch (error) {
+      console.error("Error fetching reports:", error instanceof Error ? error.message : "Unknown error");
+      setReports([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [statusFilter, typeFilter]);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -22,49 +44,39 @@ export default function ReportsPage() {
 
   useEffect(() => {
     fetchReports();
-  }, [statusFilter, typeFilter]);
+  }, [fetchReports]);
 
-  const fetchReports = async () => {
+  const updateReportStatus = async (reportId: string, newStatus: ReportStatus) => {
     try {
-      let url = "/api/reports";
-      const params = new URLSearchParams();
-      if (statusFilter !== "ALL") params.append("status", statusFilter);
-      if (typeFilter !== "ALL") params.append("type", typeFilter);
-      if (params.toString()) url += `?${params.toString()}`;
-
-      const response = await fetch(url);
-      const data = await response.json();
-      setReports(data);
-    } catch (error) {
-      console.error("Error fetching reports:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const updateReportStatus = async (id: string, newStatus: ReportStatus) => {
-    try {
-      await fetch(`/api/reports/${id}`, {
+      const response = await fetch(`/api/reports/${reportId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: newStatus }),
       });
-      fetchReports();
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      await fetchReports();
     } catch (error) {
-      console.error("Error updating report:", error);
+      console.error("Error updating report:", error instanceof Error ? error.message : "Unknown error");
+      alert("Failed to update report status. Please try again.");
     }
   };
 
-  const deleteReport = async (id: string) => {
+  const deleteReport = async (reportId: string) => {
     if (!confirm("Are you sure you want to delete this report?")) return;
     
     try {
-      await fetch(`/api/reports/${id}`, {
+      const response = await fetch(`/api/reports/${reportId}`, {
         method: "DELETE",
       });
-      fetchReports();
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      await fetchReports();
     } catch (error) {
-      console.error("Error deleting report:", error);
+      console.error("Error deleting report:", error instanceof Error ? error.message : "Unknown error");
+      alert("Failed to delete report. Please try again.");
     }
   };
 

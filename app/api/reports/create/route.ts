@@ -1,50 +1,57 @@
 import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { ReportStatus, ReportType, SpecificReportType } from "@prisma/client";
 import prisma from "@/lib/prisma";
-import { ReportType } from "@prisma/client";
+import { authOptions } from "@/lib/auth";
 
-export async function POST(request: Request) {
+export async function POST(req: Request) {
   try {
-    const {
-      reportId,
-      type,
-      specificType,
-      title,
-      description,
-      location,
-      latitude,
-      longitude,
-      image,
-      status,
-    } = await request.json();
+    const session = await getServerSession(authOptions);
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = await req.json();
+    const { title, description, type, specificType, location, latitude, longitude, image } = body;
+
+    if (!title || !description || !type || !specificType) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+
+    // Validate the type is a valid ReportType
+    if (!Object.values(ReportType).includes(type)) {
+      return NextResponse.json({ error: "Invalid report type" }, { status: 400 });
+    }
+
+    // Validate the specificType is a valid SpecificReportType
+    if (!Object.values(SpecificReportType).includes(specificType)) {
+      return NextResponse.json({ error: "Invalid specific report type" }, { status: 400 });
+    }
+
+    const reportCount = await prisma.report.count();
+    const reportId = `REP${String(reportCount + 1).padStart(3, "0")}`;
 
     const report = await prisma.report.create({
       data: {
         reportId,
-        type: type as ReportType,
         title,
         description,
-        reportType: specificType,
+        type: type as ReportType,
+        specificType: specificType as SpecificReportType,
         location,
-        latitude: latitude || null,
-        longitude: longitude || null,
-        image: image || null,
-        status: status || "PENDING",
+        latitude: latitude ? parseFloat(latitude) : null,
+        longitude: longitude ? parseFloat(longitude) : null,
+        image,
+        status: ReportStatus.PENDING,
       },
     });
 
-    return NextResponse.json({
-      success: true,
-      reportId: report.reportId,
-      message: "Report submitted successfully",
-    });
+    return NextResponse.json(report);
   } catch (error) {
     console.error("Error creating report:", error);
     return NextResponse.json(
-      {
-        success: false,
-        error: "Failed to submit report",
-      },
+      { error: "Failed to create report" },
       { status: 500 }
     );
   }
-}
+} 

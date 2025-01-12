@@ -1,23 +1,54 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { Role, User } from "@prisma/client";
+import { Role } from "@prisma/client";
 import { Edit2, Trash2, UserPlus } from "lucide-react";
 
+interface UserData {
+  id: string;
+  name: string;
+  email: string;
+  role: Role;
+  createdAt: Date;
+}
+
+interface NewUser {
+  name: string;
+  email: string;
+  password: string;
+  role: Role;
+}
+
+const isValidRole = (value: string): value is Role => {
+  return Object.values(Role).includes(value as Role);
+};
+
 export default function UsersPage() {
-  const { data: session, status } = useSession();
+  const { status } = useSession();
   const router = useRouter();
-  const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [users, setUsers] = useState<UserData[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [newUser, setNewUser] = useState({
+  const [newUser, setNewUser] = useState<NewUser>({
     name: "",
     email: "",
     password: "",
     role: Role.USER,
   });
+
+  const fetchUsers = useCallback(async () => {
+    try {
+      const response = await fetch("/api/users");
+      const data = await response.json();
+      setUsers(data);
+    } catch (error) {
+      console.error("Error fetching users:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -27,19 +58,7 @@ export default function UsersPage() {
 
   useEffect(() => {
     fetchUsers();
-  }, []);
-
-  const fetchUsers = async () => {
-    try {
-      const response = await fetch("/api/users");
-      const data = await response.json();
-      setUsers(data);
-    } catch (error) {
-      console.error("Error fetching users:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [fetchUsers]);
 
   const createUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,7 +75,7 @@ export default function UsersPage() {
         fetchUsers();
       }
     } catch (error) {
-      console.error("Error creating user:", error);
+      console.error("Error creating user:", error instanceof Error ? error.message : "Unknown error");
     }
   };
 
@@ -75,11 +94,11 @@ export default function UsersPage() {
         alert(data.error || "Error deleting user");
       }
     } catch (error) {
-      console.error("Error deleting user:", error);
+      console.error("Error deleting user:", error instanceof Error ? error.message : "Unknown error");
     }
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
@@ -121,8 +140,8 @@ export default function UsersPage() {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   <span className={`px-2 py-1 rounded-full text-xs ${
-                    user.role === Role.ADMIN ? 'bg-purple-100 text-purple-800' :
-                    user.role === Role.MODERATOR ? 'bg-blue-100 text-blue-800' :
+                    user.role === "ADMIN" ? 'bg-purple-100 text-purple-800' :
+                    user.role === "MODERATOR" ? 'bg-blue-100 text-blue-800' :
                     'bg-gray-100 text-gray-800'
                   }`}>
                     {user.role}
@@ -190,8 +209,13 @@ export default function UsersPage() {
                   <label className="block text-sm font-medium text-gray-700">Role</label>
                   <select
                     value={newUser.role}
-                    onChange={(e) => setNewUser({ ...newUser, role: e.target.value as Role })}
-                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2"
+                    onChange={(e) => {
+                      const selectedRole = e.target.value;
+                      if (isValidRole(selectedRole)) {
+                        setNewUser({ ...newUser, role: selectedRole });
+                      }
+                    }}
+                    className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                   >
                     {Object.values(Role).map((role) => (
                       <option key={role} value={role}>{role}</option>

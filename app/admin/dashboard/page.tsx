@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Report, ReportStatus, ReportType } from "@prisma/client";
@@ -14,7 +14,7 @@ interface DashboardStats {
 }
 
 export default function AdminDashboard() {
-  const { data: session, status } = useSession();
+  const { status } = useSession();
   const router = useRouter();
   const [reports, setReports] = useState<Report[]>([]);
   const [stats, setStats] = useState<DashboardStats>({
@@ -31,30 +31,36 @@ export default function AdminDashboard() {
     }
   }, [status, router]);
 
-  useEffect(() => {
-    const fetchReports = async () => {
-      try {
-        const response = await fetch("/api/reports");
-        const data = await response.json();
-        setReports(data);
+  const fetchReports = useCallback(async () => {
+    try {
+      const response = await fetch("/api/reports");
+      const data = await response.json();
+      setReports(data);
 
-        // Calculate stats
-        const stats = {
-          totalReports: data.length,
-          pendingReports: data.filter((r: Report) => r.status === ReportStatus.PENDING).length,
-          resolvedReports: data.filter((r: Report) => r.status === ReportStatus.RESOLVED).length,
-          emergencyReports: data.filter((r: Report) => r.type === ReportType.EMERGENCY).length,
-        };
-        setStats(stats);
-      } catch (error) {
-        console.error("Error fetching reports:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchReports();
+      // Calculate stats
+      const stats = {
+        totalReports: data.length,
+        pendingReports: data.filter((r: Report) => r.status === ReportStatus.PENDING).length,
+        resolvedReports: data.filter((r: Report) => r.status === ReportStatus.RESOLVED).length,
+        emergencyReports: data.filter((r: Report) => r.type === ReportType.EMERGENCY).length,
+      };
+      setStats(stats);
+    } catch (error) {
+      console.error("Error fetching reports:", error instanceof Error ? error.message : "Unknown error");
+      setStats({
+        totalReports: 0,
+        pendingReports: 0,
+        resolvedReports: 0,
+        emergencyReports: 0,
+      });
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchReports();
+  }, [fetchReports]);
 
   if (loading) {
     return (
@@ -146,7 +152,17 @@ export default function AdminDashboard() {
   );
 }
 
-function StatCard({ title, value, icon, className = "" }) {
+function StatCard({ 
+  title,
+  value,
+  icon,
+  className = ""
+}: {
+  title: string;
+  value: string | number;
+  icon: React.ReactNode;
+  className?: string;
+}) {
   return (
     <div className={`rounded-lg shadow p-6 ${className}`}>
       <div className="flex items-center justify-between">

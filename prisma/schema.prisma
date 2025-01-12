@@ -19,13 +19,26 @@ enum ReportType {
   NON_EMERGENCY
 }
 
+enum SpecificReportType {
+  THEFT
+  FIRE_OUTBREAK
+  MEDICAL_EMERGENCY
+  NATURAL_DISASTER
+  VIOLENCE
+  TRAFFIC_ACCIDENT
+  VANDALISM
+  SUSPICIOUS_ACTIVITY
+  PUBLIC_DISTURBANCE
+  OTHER
+}
+
 model Report {
-  id          String   @id @default(cuid()) @map("_id")
-  reportId    String   @unique
+  id          String       @id @default(cuid()) @map("_id")
+  reportId    String       @unique
   type        ReportType
+  specificType SpecificReportType
   title       String
   description String
-  reportType  String
   location    String?
   latitude    Float?
   longitude   Float?
@@ -41,6 +54,7 @@ model User {
   name     String
   password String
   role     Role     @default(USER)
+  createdAt DateTime @default(now())
 }
 
 enum Role {

@@ -1,20 +1,27 @@
-import prisma from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
+import { hash } from "bcryptjs";
+import prisma from "@/lib/prisma";
+import { Role } from "@prisma/client";
+
+interface SignupRequest {
+  name: string;
+  email: string;
+  password: string;
+  role?: Role;
+}
 
 export async function POST(request: Request) {
   try {
-    const { email, password, name, role } = await request.json();
+    const body: SignupRequest = await request.json();
+    const { name, email, password } = body;
 
-    // Basic validation
-    if (!email || !password || !name) {
+    if (!name || !email || !password) {
       return NextResponse.json(
         { error: "Missing required fields" },
         { status: 400 }
       );
     }
 
-    // Check if user already exists
     const existingUser = await prisma.user.findUnique({
       where: { email },
     });
@@ -26,25 +33,26 @@ export async function POST(request: Request) {
       );
     }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await hash(password, 12);
 
-    // Create user
-    const user = await prisma.user.create({
+    await prisma.user.create({
       data: {
-        email,
         name,
+        email,
         password: hashedPassword,
-        role: role as "ADMIN" | "MODERATOR" | "USER",
+        role: Role.USER,
       },
     });
 
-    // Remove password from response
-    const { password: _, ...userWithoutPassword } = user;
-
-    return NextResponse.json(userWithoutPassword, { status: 201 });
-  } catch (error: any) {
-    console.error("Signup error:", error);
-    return NextResponse.json({ error: "Error creating user" }, { status: 500 });
+    return NextResponse.json(
+      { message: "User created successfully" },
+      { status: 201 }
+    );
+  } catch (error) {
+    console.error("Error in signup:", error instanceof Error ? error.message : "Unknown error");
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
   }
 }

@@ -7,32 +7,36 @@ import bcrypt from 'bcryptjs';
 export async function GET() {
   try {
     const session = await getServerSession();
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session?.user?.email) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
     }
 
-    // Get user settings (you might want to add a UserSettings model to your schema)
     const user = await prisma.user.findUnique({
-      where: { email: session.user?.email! },
+      where: {
+        email: session?.user?.email || '',
+      },
       select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-      }
+        settings: true,
+      },
     });
 
-    return NextResponse.json({
-      user,
-      settings: {
-        emailNotifications: true, // Default values
-        pushNotifications: true,
-        darkMode: true,
-      }
-    });
+    if (!user?.settings) {
+      return NextResponse.json(
+        { error: "User settings not found" },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json(user.settings);
   } catch (error) {
-    console.error('Error fetching settings:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    console.error('Error fetching settings:', error instanceof Error ? error.message : 'Unknown error');
+    return NextResponse.json(
+      { error: 'Failed to fetch settings' },
+      { status: 500 }
+    );
   }
 }
 
@@ -40,7 +44,7 @@ export async function GET() {
 export async function PATCH(req: Request) {
   try {
     const session = await getServerSession();
-    if (!session) {
+    if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -50,7 +54,7 @@ export async function PATCH(req: Request) {
     // If changing password
     if (currentPassword && newPassword) {
       const user = await prisma.user.findUnique({
-        where: { email: session.user?.email! }
+        where: { email: session.user.email }
       });
 
       if (!user) {
@@ -74,10 +78,9 @@ export async function PATCH(req: Request) {
     }
 
     // Handle other settings updates here
-    // You might want to add a UserSettings model to your schema
     return NextResponse.json({ message: 'Settings updated successfully' });
   } catch (error) {
-    console.error('Error updating settings:', error);
+    console.error('Error updating settings:', error instanceof Error ? error.message : 'Unknown error');
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 } 

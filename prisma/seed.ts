@@ -1,4 +1,4 @@
-import { PrismaClient, ReportStatus, ReportType, Role } from '@prisma/client'
+import { PrismaClient, ReportStatus, ReportType, Role, SpecificReportType } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 
 const prisma = new PrismaClient()
@@ -59,7 +59,7 @@ async function main() {
               ? 'Immediate attention required.' 
               : 'Please review when possible.'
           }`,
-          reportType: isEmergency ? 'CRIME_IN_PROGRESS' : 'SUSPICIOUS_ACTIVITY',
+          specificType: isEmergency ? SpecificReportType.VIOLENCE : SpecificReportType.SUSPICIOUS_ACTIVITY,
           location: `Location ${i + 1}, City Area`,
           latitude: 9.0 + Math.random() * 0.5, // Random coordinates around Ethiopia
           longitude: 38.7 + Math.random() * 0.5,

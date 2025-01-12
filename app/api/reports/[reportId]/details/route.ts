@@ -4,13 +4,13 @@ import { getServerSession } from "next-auth";
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: { reportId: string } }
 ) {
   try {
     const report = await prisma.report.findUnique({
       where: {
-        id: params.id,
-      },
+        id: params.reportId,
+      }
     });
 
     if (!report) {
@@ -19,7 +19,7 @@ export async function GET(
 
     return NextResponse.json(report);
   } catch (error) {
-    console.error("Error fetching report details:", error);
+    console.error("Error fetching report details:", error instanceof Error ? error.message : "Unknown error");
     return NextResponse.json(
       { error: "Failed to fetch report details" },
       { status: 500 }
@@ -29,7 +29,7 @@ export async function GET(
 
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: { reportId: string } }
 ) {
   try {
     const session = await getServerSession();
@@ -39,14 +39,15 @@ export async function PATCH(
 
     const { status } = await request.json();
     const report = await prisma.report.update({
-      where: { id: params.id },
+      where: { id: params.reportId },
       data: { status },
     });
 
     return NextResponse.json(report);
   } catch (error) {
+    console.error("Error updating report details:", error instanceof Error ? error.message : "Unknown error");
     return NextResponse.json(
-      { error: "Error updating report" },
+      { error: "Failed to update report details" },
       { status: 500 }
     );
   }

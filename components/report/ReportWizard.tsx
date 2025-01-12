@@ -2,27 +2,68 @@
 
 import { useState } from "react";
 import { ReportForm } from "./ReportForm";
-import { ReportSubmitted } from "./ReportFormCompleted";
+import { ReportFormCompleted } from "./ReportFormCompleted";
+import { Report, ReportType, ReportStatus, SpecificReportType } from "@prisma/client";
+
+interface ReportData {
+  title: string;
+  description: string;
+  type: ReportType;
+  specificType: SpecificReportType;
+  location: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  image: string | null;
+}
+
+interface ReportWizardState {
+  step: number;
+  report: Report | null;
+}
 
 export function ReportWizard() {
-  const [currentStep, setCurrentStep] = useState(1);
-  const [reportData, setReportData] = useState<any>(null);
+  const [state, setState] = useState<ReportWizardState>({
+    step: 1,
+    report: null,
+  });
 
-  const handleStepComplete = async (data: any) => {
-    setReportData({ ...reportData, ...data });
+  const handleReportComplete = async (data: ReportData) => {
+    try {
+      const response = await fetch("/api/reports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...data,
+          status: ReportStatus.PENDING,
+        }),
+      });
 
-    if (currentStep === 4) {
-      return;
+      if (!response.ok) {
+        throw new Error("Failed to create report");
+      }
+
+      const report = await response.json() as Report;
+      setState({
+        step: 2,
+        report,
+      });
+    } catch (error) {
+      console.error("Error creating report:", error instanceof Error ? error.message : "Unknown error");
     }
+  };
 
-    setCurrentStep((prev) => prev + 1);
+  const handleReset = () => {
+    setState({
+      step: 1,
+      report: null,
+    });
   };
 
   return (
-    <div className="rounded-2xl bg-zinc-900 p-8">
-      {currentStep === 1 && <ReportForm onComplete={handleStepComplete} />}
-      {currentStep === 2 && (
-        <ReportSubmitted data={reportData} onComplete={handleStepComplete} />
+    <div className="max-w-2xl mx-auto">
+      {state.step === 1 && <ReportForm onComplete={handleReportComplete} />}
+      {state.step === 2 && state.report && (
+        <ReportFormCompleted report={state.report} onReset={handleReset} />
       )}
     </div>
   );

@@ -1,9 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { User, Role } from "@prisma/client";
 import { Users, Shield, UserCheck, UserX, Edit2, Trash2, UserPlus } from "lucide-react";
 import { useRouter } from "next/navigation";
+
+interface NewUser {
+  name: string;
+  email: string;
+  password: string;
+  role: Role;
+}
 
 export default function UsersPage() {
   const router = useRouter();
@@ -11,18 +18,14 @@ export default function UsersPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [roleFilter, setRoleFilter] = useState<Role | "ALL">("ALL");
   const [showAddModal, setShowAddModal] = useState(false);
-  const [newUser, setNewUser] = useState({
+  const [newUser, setNewUser] = useState<NewUser>({
     name: "",
     email: "",
     password: "",
     role: Role.USER,
   });
 
-  useEffect(() => {
-    fetchUsers();
-  }, [roleFilter]);
-
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     try {
       const response = await fetch("/api/users");
       const data = await response.json();
@@ -32,7 +35,11 @@ export default function UsersPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [roleFilter]);
+
+  useEffect(() => {
+    fetchUsers();
+  }, [fetchUsers]);
 
   const createUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -243,7 +250,12 @@ export default function UsersPage() {
                 <label className="block text-sm font-medium text-neutral-300 mb-1">Role</label>
                 <select
                   value={newUser.role}
-                  onChange={(e) => setNewUser({ ...newUser, role: e.target.value as Role })}
+                  onChange={(e) => {
+                    const selectedRole = e.target.value as Role;
+                    if (Object.values(Role).includes(selectedRole)) {
+                      setNewUser({ ...newUser, role: selectedRole });
+                    }
+                  }}
                   className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                 >
                   {Object.values(Role).map((role) => (

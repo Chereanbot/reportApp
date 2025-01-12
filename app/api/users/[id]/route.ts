@@ -5,6 +5,13 @@ import { Role } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { authOptions } from "@/lib/auth";
 
+interface UpdateUserData {
+  name: string;
+  email: string;
+  role?: Role;
+  password?: string;
+}
+
 // GET /api/users/[id]
 export async function GET(
   request: Request,
@@ -91,7 +98,7 @@ export async function PATCH(
     }
 
     // Build update data
-    const updateData: any = {
+    const updateData: UpdateUserData = {
       name,
       email,
     };

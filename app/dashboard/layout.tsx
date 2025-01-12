@@ -3,6 +3,7 @@
 import { useSession } from "next-auth/react";
 import { redirect } from "next/navigation";
 import AdminSidebar from "../components/AdminSidebar";
+import AdminHeader from "../components/AdminHeader";
 
 export default function DashboardLayout({
   children,
@@ -26,7 +27,8 @@ export default function DashboardLayout({
   return (
     <div className="min-h-screen bg-black text-white">
       <AdminSidebar />
-      <main className="lg:pl-64 min-h-screen">
+      <AdminHeader />
+      <main className="lg:pl-64 pt-[73px] min-h-screen">
         {children}
       </main>
     </div>

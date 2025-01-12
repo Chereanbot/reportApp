@@ -1,19 +1,19 @@
 "use client";
 
-interface ReportSubmittedProps {
-  data: any;
-  onComplete: (data: any) => void;
+import { Report } from "@prisma/client";
+
+interface ReportFormCompletedProps {
+  report: Report;
+  onReset: () => void;
 }
 
-export function ReportSubmitted({ data }: ReportSubmittedProps) {
-  const reportId = data.reportId || "ERROR-ID-NOT-FOUND";
-
+export function ReportFormCompleted({ report, onReset }: ReportFormCompletedProps) {
   return (
-    <div className="text-center space-y-6">
-      <div className="flex flex-col items-center">
-        <div className="bg-green-500/10 rounded-full p-3">
+    <div className="space-y-6">
+      <div className="text-center">
+        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-500/20 mb-4">
           <svg
-            className="w-16 h-16 text-green-500"
+            className="w-8 h-8 text-green-500"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -26,31 +26,51 @@ export function ReportSubmitted({ data }: ReportSubmittedProps) {
             />
           </svg>
         </div>
-        <h3 className="mt-4 text-xl font-medium text-white">
-          Report Successfully Submitted
-        </h3>
-        <p className="mt-2 text-sm text-zinc-400">
-          Your report has been securely transmitted to law enforcement
+        <h2 className="text-2xl font-bold text-white mb-2">Report Submitted Successfully</h2>
+        <p className="text-neutral-400">
+          Your report has been received and will be reviewed by our team.
         </p>
       </div>
 
-      <div className="bg-zinc-800/50 rounded-lg p-6 max-w-md mx-auto">
-        <h4 className="text-white font-medium mb-2">Your Report ID</h4>
-        <div className="bg-zinc-900 rounded p-3">
-          <code className="text-sky-400">{reportId}</code>
+      <div className="bg-neutral-800/50 rounded-xl p-6 space-y-4">
+        <div>
+          <h3 className="text-sm font-medium text-neutral-400">Report ID</h3>
+          <p className="text-white">{report.reportId}</p>
         </div>
-        <p className="mt-2 text-sm text-zinc-400">
-          Save this ID to check your report status or communicate securely with
-          law enforcement
-        </p>
+        <div>
+          <h3 className="text-sm font-medium text-neutral-400">Title</h3>
+          <p className="text-white">{report.title}</p>
+        </div>
+        <div>
+          <h3 className="text-sm font-medium text-neutral-400">Description</h3>
+          <p className="text-white">{report.description}</p>
+        </div>
+        <div>
+          <h3 className="text-sm font-medium text-neutral-400">Type</h3>
+          <p className="text-white">{report.type}</p>
+        </div>
+        <div>
+          <h3 className="text-sm font-medium text-neutral-400">Specific Type</h3>
+          <p className="text-white">{report.specificType}</p>
+        </div>
+        {report.location && (
+          <div>
+            <h3 className="text-sm font-medium text-neutral-400">Location</h3>
+            <p className="text-white">{report.location}</p>
+          </div>
+        )}
+        <div>
+          <h3 className="text-sm font-medium text-neutral-400">Status</h3>
+          <p className="text-white">{report.status}</p>
+        </div>
       </div>
 
-      <div className="pt-4">
+      <div className="flex justify-center">
         <button
-          onClick={() => (window.location.href = "/")}
-          className="inline-flex items-center justify-center rounded-lg bg-sky-500 px-4 py-2 text-sm font-medium text-white hover:bg-sky-400"
+          onClick={onReset}
+          className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-white rounded-md"
         >
-          Return to Home
+          Submit Another Report
         </button>
       </div>
     </div>

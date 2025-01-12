@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Report, ReportStatus, ReportType } from "@prisma/client";
 import { FileText, MapPin, Calendar, AlertCircle } from "lucide-react";
 
@@ -10,11 +10,7 @@ export default function ReportsPage() {
   const [statusFilter, setStatusFilter] = useState<ReportStatus | "ALL">("ALL");
   const [typeFilter, setTypeFilter] = useState<ReportType | "ALL">("ALL");
 
-  useEffect(() => {
-    fetchReports();
-  }, [statusFilter, typeFilter]);
-
-  const fetchReports = async () => {
+  const fetchReports = useCallback(async () => {
     try {
       let url = "/api/reports";
       const params = new URLSearchParams();
@@ -23,14 +19,22 @@ export default function ReportsPage() {
       if (params.toString()) url += `?${params.toString()}`;
 
       const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
       const data = await response.json();
       setReports(data);
     } catch (error) {
-      console.error("Error fetching reports:", error);
+      console.error("Error fetching reports:", error instanceof Error ? error.message : "Unknown error");
+      setReports([]);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [statusFilter, typeFilter]);
+
+  useEffect(() => {
+    fetchReports();
+  }, [fetchReports]);
 
   const getStatusColor = (status: ReportStatus) => {
     const colors = {

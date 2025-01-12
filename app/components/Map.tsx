@@ -23,10 +23,14 @@ interface MapProps {
   onSelectReport: (report: Report) => void;
 }
 
+interface IconDefault extends L.Icon.Default {
+  _getIconUrl?: string;
+}
+
 export default function Map({ center, reports, onSelectReport }: MapProps) {
   useEffect(() => {
     // Fix for the default marker icon
-    delete (L.Icon.Default.prototype as any)._getIconUrl;
+    delete (L.Icon.Default.prototype as IconDefault)._getIconUrl;
     L.Icon.Default.mergeOptions({
       iconRetinaUrl: "/marker-icon-2x.png",
       iconUrl: "/marker-icon.png",
