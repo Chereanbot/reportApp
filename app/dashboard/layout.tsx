@@ -2,7 +2,7 @@
 
 import { useSession } from "next-auth/react";
 import { redirect } from "next/navigation";
-import AdminSidebar from "../components/AdminSidebar";
+import { AdminSidebar } from "../components/AdminSidebar";
 import AdminHeader from "../components/AdminHeader";
 
 export default function DashboardLayout({
