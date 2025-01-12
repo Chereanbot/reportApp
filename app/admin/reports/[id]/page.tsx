@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -7,7 +9,7 @@ export default function ReportDetailsPage({ params }: { params: { id: string } }
   const { status } = useSession();
   const router = useRouter();
   const [report, setReport] = useState<Report | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -23,7 +25,7 @@ export default function ReportDetailsPage({ params }: { params: { id: string } }
     } catch (error) {
       console.error("Error fetching report:", error instanceof Error ? error.message : "Unknown error");
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   }, [params.id]);
 
@@ -31,7 +33,7 @@ export default function ReportDetailsPage({ params }: { params: { id: string } }
     fetchReport();
   }, [fetchReport]);
 
-  if (isLoading) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
