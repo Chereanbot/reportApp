@@ -2,52 +2,96 @@
 
 import { useEffect } from 'react';
 
+interface AdSenseConfig {
+  [key: string]: unknown;
+}
+
+declare global {
+  interface Window {
+    adsbygoogle: AdSenseConfig[];
+  }
+}
+
 interface AdUnitProps {
-  adSlot: string;
-  adFormat?: 'auto' | 'rectangle' | 'horizontal' | 'vertical';
+  className?: string;
+  slot: string;
+  responsive?: boolean;
+  format?: string;
   style?: React.CSSProperties;
 }
 
-interface WindowWithAds extends Window {
-  adsbygoogle: unknown[];
+const ADSENSE_ID = process.env.NEXT_PUBLIC_ADSENSE_ID;
+const isProduction = process.env.NODE_ENV === 'production';
+const isVercel = process.env.VERCEL === '1';
+
+function loadAdSenseScript() {
+  if (!ADSENSE_ID) {
+    console.error('AdSense ID is not configured in environment variables');
+    return;
+  }
+
+  // Check if script is already loaded
+  if (document.querySelector(`script[src*="adsbygoogle"]`)) {
+    return;
+  }
+
+  // Load the AdSense script
+  const script = document.createElement('script');
+  script.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_ID}`;
+  script.async = true;
+  script.crossOrigin = 'anonymous';
+  document.head.appendChild(script);
 }
 
-const AdUnit = ({ adSlot, adFormat = 'auto', style }: AdUnitProps) => {
+export function AdUnit({ className, slot, responsive, format, style }: AdUnitProps) {
   useEffect(() => {
     try {
-      // Load AdSense script if not already loaded
-      const windowWithAds = window as WindowWithAds;
-      if (!windowWithAds.adsbygoogle) {
-        const script = document.createElement('script');
-        script.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${process.env.NEXT_PUBLIC_ADSENSE_ID}`;
-        script.async = true;
-        script.crossOrigin = 'anonymous';
-        document.head.appendChild(script);
+      // Only load ads in production and if AdSense ID is configured
+      if (!isProduction || !ADSENSE_ID) {
+        return;
       }
 
-      // Push the ad
-      windowWithAds.adsbygoogle = windowWithAds.adsbygoogle || [];
-      windowWithAds.adsbygoogle.push({});
+      loadAdSenseScript();
+
+      // Initialize adsbygoogle if not already initialized
+      if (!window.adsbygoogle) {
+        window.adsbygoogle = [];
+      }
+
+      // Push the ad configuration
+      window.adsbygoogle.push({});
     } catch (error) {
-      console.error('Error loading AdSense:', error);
+      console.error('Error loading ad:', error instanceof Error ? error.message : 'Unknown error');
     }
   }, []);
 
-  return (
-    <div className="ad-container my-4">
-      <ins
-        className="adsbygoogle"
-        style={{
-          display: 'block',
-          ...style,
+  // Don't render ads in development or if AdSense ID is missing
+  if (!isProduction || !ADSENSE_ID) {
+    return (
+      <div 
+        style={{ 
+          background: '#f0f0f0',
+          padding: '1rem',
+          textAlign: 'center',
+          border: '1px dashed #ccc'
         }}
-        data-ad-client={process.env.NEXT_PUBLIC_ADSENSE_ID}
-        data-ad-slot={adSlot}
-        data-ad-format={adFormat}
-        data-full-width-responsive="true"
-      />
-    </div>
-  );
-};
+      >
+        Ad Placeholder ({slot})
+        {!isProduction && <div>Ads only show in production</div>}
+        {!ADSENSE_ID && <div>AdSense ID not configured</div>}
+      </div>
+    );
+  }
 
-export default AdUnit; 
+  return (
+    <ins
+      className={`adsbygoogle ${className || ''}`}
+      style={style || { display: 'block' }}
+      data-ad-client={ADSENSE_ID}
+      data-ad-slot={slot}
+      data-ad-format={format}
+      data-full-width-responsive={responsive}
+      data-adtest={isVercel ? 'on' : undefined}
+    />
+  );
+} 

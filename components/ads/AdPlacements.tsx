@@ -1,25 +1,31 @@
-import AdUnit from './AdUnit';
+import { AdUnit } from './AdUnit';
 
+// Website Developer Ad
 export const InArticleAd = () => (
   <AdUnit
-    adSlot="YOUR_AD_SLOT_ID"
-    adFormat="rectangle"
-    style={{ minHeight: '250px', backgroundColor: '#f3f4f6' }}
+    slot="5993635694"
+    format="auto"
+    responsive={true}
+    style={{ display: 'block' }}
   />
 );
 
+// Mobile App Ad
 export const SidebarAd = () => (
   <AdUnit
-    adSlot="YOUR_AD_SLOT_ID"
-    adFormat="vertical"
-    style={{ minHeight: '600px', backgroundColor: '#f3f4f6' }}
+    slot="9741309012"
+    format="auto"
+    responsive={true}
+    style={{ display: 'block' }}
   />
 );
 
+// Horizontal Ad (Website Developer slot reused for banner)
 export const BannerAd = () => (
   <AdUnit
-    adSlot="YOUR_AD_SLOT_ID"
-    adFormat="horizontal"
-    style={{ minHeight: '90px', backgroundColor: '#f3f4f6' }}
+    slot="5993635694"
+    format="auto"
+    responsive={true}
+    style={{ display: 'block' }}
   />
 ); 

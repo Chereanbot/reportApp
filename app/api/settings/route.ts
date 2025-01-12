@@ -3,6 +3,10 @@ import prisma from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import bcrypt from 'bcryptjs';
 
+// Prevent static generation for this route
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 // GET /api/settings
 export async function GET() {
   try {
@@ -16,21 +20,24 @@ export async function GET() {
 
     const user = await prisma.user.findUnique({
       where: {
-        email: session?.user?.email || '',
+        email: session.user.email
       },
       select: {
-        settings: true,
-      },
+        id: true,
+        name: true,
+        email: true,
+        role: true
+      }
     });
 
-    if (!user?.settings) {
+    if (!user) {
       return NextResponse.json(
-        { error: "User settings not found" },
+        { error: "User not found" },
         { status: 404 }
       );
     }
 
-    return NextResponse.json(user.settings);
+    return NextResponse.json(user);
   } catch (error) {
     console.error('Error fetching settings:', error instanceof Error ? error.message : 'Unknown error');
     return NextResponse.json(

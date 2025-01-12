@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { ReportType, SpecificReportType } from "@prisma/client";
 
+// Prevent static generation for this route
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 const REPORT_TYPES = {

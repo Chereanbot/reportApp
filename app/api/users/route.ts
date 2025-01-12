@@ -4,6 +4,10 @@ import { getServerSession } from 'next-auth';
 import { Role } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
+// Prevent static generation for this route
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 // GET /api/users
 export async function GET() {
   try {

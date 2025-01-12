@@ -5,6 +5,10 @@ import { Role } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { authOptions } from "@/lib/auth";
 
+// Prevent static generation for this route
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 interface UpdateUserData {
   name: string;
   email: string;

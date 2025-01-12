@@ -3,6 +3,10 @@ import { hash } from "bcryptjs";
 import prisma from "@/lib/prisma";
 import { Role } from "@prisma/client";
 
+// Prevent static generation for this route
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 interface SignupRequest {
   name: string;
   email: string;
